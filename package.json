@@ -1,0 +1,26 @@
+{
+  "name": "tradingview-finnhub",
+  "private": true,
+  "dependencies": {
+    "react": "^16.12.0",
+    "react-dom": "^16.12.0",
+    "react-scripts": "3.4.0",
+    "request-promise": "^4.2.5"
+  },
+  "scripts": {
+    "start": "PORT=8080 react-scripts start",
+    "build": "PORT=8080 react-scripts build"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
