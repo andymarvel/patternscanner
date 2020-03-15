@@ -2,6 +2,10 @@ import * as React from 'react';
 import './index.css';
 import { widget } from '../../charting_library/charting_library.min';
 import Datafeed from './datafeed';
+const rp = require('request-promise').defaults({json: true})
+const api_root = 'https://finnhub.io/api/v1/scan/pattern'
+const api_key = 'bp60vd7rh5rcobn2deeg'
+var patternIds = []
 
 function getLanguageFromURL() {
 	const regex = new RegExp('[\\?&]lang=([^&#]*)');
@@ -10,49 +14,36 @@ function getLanguageFromURL() {
 }
 
 export class TVChartContainer extends React.PureComponent {
-	static defaultProps = {
-		symbol: 'BINANCE:BTC/USDT',
-		interval: '1',
-		containerId: 'tv_chart_container',
-		// datafeedUrl: 'https://demo_feed.tradingview.com',
-		datafeed: Datafeed,
-		libraryPath: '/charting_library/',
-		chartsStorageUrl: 'https://saveload.tradingview.com',
-		chartsStorageApiVersion: '1.1',
-		clientId: 'tradingview.com',
-		userId: 'public_user_id',
-		fullscreen: false,
-		autosize: true,
-		studiesOverrides: {},
-	};
-
 	tvWidget = null;
 
 	componentDidMount() {
 		const widgetOptions = {
-			symbol: this.props.symbol,
-			// BEWARE: no trailing slash is expected in feed URL
-			// datafeed: new window.Datafeeds.UDFCompatibleDatafeed(this.props.datafeedUrl),
-			datafeed: this.props.datafeed,
-			interval: this.props.interval,
-			container_id: this.props.containerId,
-			library_path: this.props.libraryPath,
+			symbol: 'BTC/USDT',
+			datafeed: Datafeed,
+			container_id: 'tv_chart_container',
+			library_path: '/charting_library/',
 			locale: getLanguageFromURL() || 'en',
 			disabled_features: ['use_localstorage_for_settings'],
 			enabled_features: ['study_templates'],
 			charts_storage_url: this.props.chartsStorageUrl,
 			charts_storage_api_version: this.props.chartsStorageApiVersion,
-			client_id: this.props.clientId,
-			user_id: this.props.userId,
-			fullscreen: this.props.fullscreen,
-			autosize: this.props.autosize,
-			studies_overrides: this.props.studiesOverrides,
+			fullscreen: false,
+            autosize: true,
+            width: "100%",
+            timezone: "America/New_York",
+            client_id: 'patternscanner',
+            user_id: 'public_user_id',
+            auto_save_delay: 10,
+            theme: 'Light',
+            loading_screen: {backgroundColor: "#222222", foregroundColor: "#229712",},
 		};
 		
 		const tvWidget = new widget(widgetOptions);
 		this.tvWidget = tvWidget;
+		const thisComponent = this;
 
 		tvWidget.onChartReady(() => {
+
 			tvWidget.headerReady().then(() => {
 				const button = tvWidget.createButton();
 				button.setAttribute('title', 'Click to show a notification popup');
@@ -66,8 +57,191 @@ export class TVChartContainer extends React.PureComponent {
 				}));
 
 				button.innerHTML = 'Check API';
+				thisComponent.getPattern()
+				
+				tvWidget.chart().onIntervalChanged().subscribe(null, function(interval, obj) {
+					console.log('On interval change')
+					thisComponent.getPattern()
+				})
+
+				tvWidget.chart().onSymbolChanged().subscribe(null, function(symbolData) {
+					console.log('Symbol change ' + symbolData)
+					thisComponent.getPattern()
+				})
 			});
 		});
+	}
+
+	getPattern() {
+		let thisComponent = this 
+		thisComponent.removeAllShape()
+
+		let symbol = thisComponent.tvWidget.chart().symbol().replace('/', '')
+		let resolution = thisComponent.tvWidget.chart().resolution()
+		console.log('Get pattern: ' + api_root+'?symbol='+ symbol+ '&resolution='+ resolution+ '&token='+ api_key)
+		const qs = {
+			symbol: symbol,
+			resolution: resolution,
+			token: api_key
+		}
+
+		rp({
+			uri: api_root,
+			qs: qs
+		}).then(data => {
+			let i = 0
+			for (let i in data.points) {
+				let point = data.points[i]
+				thisComponent.drawPattern(thisComponent.tvWidget, point)
+			}
+			console.log('Pattern', data)
+		}).catch(err => {
+			console.log(err)
+		})
+	}
+
+	drawPattern(widget, pattern) {
+		let pname = pattern.patternname.toLowerCase()
+		var patternId = ''
+
+		if (pname == 'triangle' || pname == 'wedge') {
+			let points = [
+				{
+					'time': pattern.atime,
+					'price': pattern.aprice
+				}, 
+				{
+					'time': pattern.btime,
+					'price': pattern.bprice,
+				},
+				{
+					'time': pattern.ctime,
+					'price': pattern.cprice
+				}, 
+				{
+					'time': pattern.dtime,
+					'price': pattern.dprice
+				}
+			]
+			patternId = widget.chart().createMultipointShape(points, {
+				'shape': 'triangle_pattern',
+				disableUndo: true,
+			})
+
+		} else if (pname.indexOf("double") > -1) {
+			// double bottom, double top
+			let points = [
+				{
+					'time': pattern.start_time, 
+					'price': pattern.start_price
+				}, 
+				{
+					'time': pattern.atime, 
+					'price': pattern.aprice
+				}, 
+				{
+					'time': pattern.btime,
+					'price': pattern.bprice
+				}, 
+				{
+					'time': pattern.ctime,
+					'price': pattern.cprice
+				}, 
+				{
+					'time': pattern.end_time,
+					'price': pattern.end_price
+				}
+			]
+			patternId = widget.chart().createMultipointShape(points, {
+				'shape': 'polyline',
+				disableUndo: true,
+				overrides: {"fillBackground": false, "linecolor": "#9528CC", "linewidth": 4}
+			})
+			patternIds.push(patternId)
+		} else if (pname.indexOf("triple") > -1) {
+			// triple top, triple bottom
+			let points = [
+				{
+					'time': pattern.start_time, 
+					'price': pattern.start_price
+				}, 
+				{
+					'time': pattern.atime, 
+					'price': pattern.aprice
+				}, 
+				{
+					'time': pattern.btime,
+					'price': pattern.bprice
+				}, 
+				{
+					'time': pattern.ctime,
+					'price': pattern.cprice
+				}, 
+				{
+					'time': pattern.dtime,
+					'price': pattern.dprice,
+				},
+				{
+					'time': pattern.etime,
+					'price': pattern.eprice
+				},
+				{
+					'time': pattern.end_time,
+					'price': pattern.end_price
+				}
+			]
+			patternId = widget.chart().createMultipointShape(points, {
+				'shape': 'polyline',
+				disableUndo: true,
+				overrides: {"fillBackground": false, "linecolor": "#9528CC", "linewidth": 4}
+			})
+		} else if (pname === "head and shoulders") {
+			// head and shoulder pattern
+			let points = [
+				{
+					'time': pattern.start_time, 
+					'price': pattern.start_price
+				}, 
+				{
+					'time': pattern.atime, 
+					'price': pattern.aprice
+				}, 
+				{
+					'time': pattern.btime,
+					'price': pattern.bprice
+				}, 
+				{
+					'time': pattern.ctime,
+					'price': pattern.cprice
+				}, 
+				{
+					'time': pattern.dtime,
+					'price': pattern.dprice,
+				},
+				{
+					'time': pattern.etime,
+					'price': pattern.eprice
+				},
+				{
+					'time': pattern.end_time,
+					'price': pattern.end_price
+				}
+			]
+			patternId = widget.chart().createMultipointShape(points, {
+				shape: 'head_and_shoulders',
+				disableUndo: true,
+			})
+
+		} else {
+			console.log(pname, pattern)
+		}
+	}
+
+	removeAllShape() {
+		for (let i in patternIds) {
+			this.tvWidget.chart().removeEntity(patternIds[i].id)
+		}
+		patternIds = []
 	}
 
 	componentWillUnmount() {
@@ -80,7 +254,7 @@ export class TVChartContainer extends React.PureComponent {
 	render() {
 		return (
 			<div
-				id={ this.props.containerId }
+				id='tv_chart_container'
 				className={ 'TVChartContainer' }
 			/>
 		);
