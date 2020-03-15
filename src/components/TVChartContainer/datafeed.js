@@ -4,7 +4,8 @@ const rp = require('request-promise').defaults({json: true})
 
 // Setup config
 const api_key = 'bp60vd7rh5rcobn2deeg'
-const supportedResolutions = ["1", "5", "15", "30", "60", "D", "W", "M"]
+// const supportedResolutions = ["1", "5", "15", "30", "60", "D", "W", "M"]
+const supportedResolutions = ["D"] // for the sake of this tutorial, we will use only D timeframe
 const config = {
     supported_resolutions: supportedResolutions
 }; 
@@ -19,32 +20,60 @@ const history = {}
 const socket_url = 'wss://ws.finnhub.io?token=bp60vd7rh5rcobn2deeg'
 const socket = new WebSocket(socket_url)
 var sub;
+var availableSymbols = []
 
 
 // Trading View JS Datafeed
 export default {
 	onReady: cb => {
 		console.log('onReady running')	
+		const qs = {
+			exchange: "binance",
+			token: api_key,
+		}
+		
+		// Get all crypto symbol for binance
+		rp({
+			uri: 'https://finnhub.io/api/v1/crypto/symbol',
+			qs: qs,
+		}).then(data => {
+			availableSymbols = data
+			console.log(availableSymbols)
+		})
+
 		setTimeout(() => cb(config), 0)
 	},
 
 	searchSymbols: (userInput, exchange, symbolType, onResultReadyCallback) => {
-		console.log('searchSymbols running', userInput, exchange, symbolType)
+		console.log(userInput)
+		var results = []
+		for (let i in availableSymbols) {
+			let v = availableSymbols[i]
+			if (v.displaySymbol.indexOf(userInput) > -1) {
+				// console.log(v.displaySymbol)
+				let r = {
+					symbol: v.displaySymbol,
+					full_name: v.displaySymbol,
+					description: 'BINANCE:' + v.displaySymbol,
+					exchange: "BINANCE",
+					ticker: v.displaySymbol
+				}
+				results.push(r)
+			}
+		}
+		onResultReadyCallback(results)
 	},
 
 	resolveSymbol: (symbolName, onSymbolResolvedCallback, onResolveErrorCallback) => {
 		// expects a symbolInfo object in response
-		console.log('resolveSymbol running', symbolName)
-		var split_data = symbolName.split(/[:/]/)
-
 		var symbol_stub = {
 			name: symbolName,
-			description: '',
+			description: 'Binance '+symbolName,
 			type: 'crypto',
 			session: '24x7',
 			timezone: 'Etc/UTC',
 			ticker: symbolName,
-			exchange: split_data[0],
+			exchange: 'BINANCE',
 			minmov: 1,
 			pricescale: 100000000,
 			has_intraday: true,
@@ -54,9 +83,6 @@ export default {
 			data_status: 'streaming',
 		}
 
-		if (split_data[2].match(/USD|EUR|JPY|AUD|GBP|KRW|CNY/)) {
-			symbol_stub.pricescale = 100
-		}
 		setTimeout(function() {
 			onSymbolResolvedCallback(symbol_stub)
 			console.log('Resolving that symbol....', symbol_stub)
@@ -64,13 +90,11 @@ export default {
 	},
 
 	getBars: function(symbolInfo, resolution, from, to, onHistoryCallback, onErrorCallback, firstDataRequest) {
-		console.log('getBars running')
-		// console.log('function args',arguments)
-		// console.log(`Requesting bars between ${new Date(from * 1000).toISOString()} and ${new Date(to * 1000).toISOString()}`)
-		
+		let symbol = "BINANCE:" + symbolInfo.name.replace('/', '')
+
 		const qs = {
 			// symbol: symbolInfo.name,
-			symbol: "BINANCE:BTCUSDT",
+			symbol: symbol, // "BINANCE:BTCUSDT",
 			resolution: resolution,
 			from: from,
 			to: to,
@@ -82,7 +106,6 @@ export default {
 			qs: qs,
 		}).then(data => {
 			if (data['s'] === 'ok') {
-				console.log('OK')
 				var bars = data['t'].map(function(t, i) {
 					return {
 						time: t*1000, // trading view need time in milisecond
@@ -97,7 +120,6 @@ export default {
 					var lastBar = bars[bars.length - 1]
 					history[symbolInfo.name] = {lastBar: lastBar}
 				}
-				console.log(bars)
 				return bars
 
 			} else{
@@ -134,39 +156,13 @@ export default {
             listener: onRealtimeCallback,
 		}
 		sub = newSub
-		// realtimeProvider.subscribeBars(symbolInfo, resolution, onRealtimeCallback, subscribeUID, onResetCacheNeededCallback)
 	},
 
 	unsubscribeBars: subscriberUID => {
-		console.log('=====unsubscribeBars running')
 		const symbol = sub.symbol
         socket.send(JSON.stringify({'type':'unsubscribe','symbol': symbol}))
 		socket.emit('SubRemove', {subs: [sub.channelString]})
-		
-		// realtimeProvider.unsubscribeBars(subscriberUID)
 	},
-
-	// calculateHistoryDepth: (resolution, resolutionBack, intervalBack) => {
-	// 	//optional
-	// 	console.log('=====calculateHistoryDepth running')
-	// 	// while optional, this makes sure we request 24 hours of minute data at a time
-	// 	// CryptoCompare's minute data endpoint will throw an error if we request data beyond 7 days in the past, and return no data
-	// 	return resolution < 60 ? {resolutionBack: 'D', intervalBack: '1'} : undefined
-	// },
-
-	// getMarks: (symbolInfo, startDate, endDate, onDataCallback, resolution) => {
-	// 	//optional
-	// 	console.log('=====getMarks running')
-	// },
-
-	// getTimeScaleMarks: (symbolInfo, startDate, endDate, onDataCallback, resolution) => {
-	// 	//optional
-	// 	console.log('=====getTimeScaleMarks running')
-	// },
-	
-	// getServerTime: cb => {
-	// 	console.log('=====getServerTime running')
-	// }
 }
 
 
@@ -183,8 +179,6 @@ socket.addEventListener('message', function (event) {
     if (data['type'] !== "trade") {
       return
     }
-
-    console.log('Message', sub)
 
     data['data'].forEach(element => {
         var ticker = {
@@ -250,5 +244,3 @@ function updateBar(data, sub) {
     }
     return _lastBar
 }
-
-
