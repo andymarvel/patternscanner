@@ -3,8 +3,10 @@ import './index.css';
 import { widget } from '../../charting_library/charting_library.min';
 import Datafeed from './datafeed';
 const rp = require('request-promise').defaults({json: true})
+const api_key = 'bp60vd7rh5rcobn2deeg' // THIS IS MY FREE API KEY, SIGNUP AND GET YOUR KEY at https://finnhub.io/register
+
 const api_root = 'https://finnhub.io/api/v1/scan/pattern'
-const api_key = 'bp60vd7rh5rcobn2deeg'
+
 var patternIds = []
 
 function getLanguageFromURL() {
@@ -19,6 +21,7 @@ export class TVChartContainer extends React.PureComponent {
 	componentDidMount() {
 		const widgetOptions = {
 			symbol: 'BTC/USDT',
+			// symbol: 'ETC/BTC',
 			datafeed: Datafeed,
 			container_id: 'tv_chart_container',
 			library_path: '/charting_library/',
@@ -127,7 +130,42 @@ export class TVChartContainer extends React.PureComponent {
 				'shape': 'triangle_pattern',
 				disableUndo: true,
 			})
+		} else if (pname == 'flag') {
+			// draw flag pole
+			let pole = [
+				{
+					'time': pattern.etime, 
+					'price': pattern.eprice
+				}, 
+				{
+					'time': pattern.atime,
+					'price': pattern.aprice
+				}, 
+			]
+			patternId = widget.chart().createMultipointShape(pole, {
+				'shape': 'trend_line'
+			})
 
+			// draw flag 
+			let flag = [
+				{
+					'time': pattern.atime, 
+					'price': pattern.aprice
+				}, 
+				{
+					'time': pattern.ctime,
+					'price': pattern.cprice
+				}, 
+				{
+					'time': pattern.dtime,
+					'price': pattern.dprice
+				}, 
+			]
+			patternId = widget.chart().createMultipointShape(flag, {
+				'shape': 'parallel_channel',
+				disableUndo: true,
+			})
+			
 		} else if (pname.indexOf("double") > -1) {
 			// double bottom, double top
 			let points = [

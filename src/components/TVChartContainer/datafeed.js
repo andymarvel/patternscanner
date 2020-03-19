@@ -3,8 +3,8 @@
 const rp = require('request-promise').defaults({json: true})
 
 // Setup config
-const api_key = 'bp60vd7rh5rcobn2deeg'
-// const supportedResolutions = ["1", "5", "15", "30", "60", "D", "W", "M"]
+const api_key = 'bp60vd7rh5rcobn2deeg' // THIS IS MY FREE API KEY, SIGNUP AND GET YOUR KEY at https://finnhub.io/register
+// const supportedResolutions = ["1", "5", "15", "30", "60", "D", "W", "M"] // supported resolution by finnhub
 const supportedResolutions = ["D"] // for the sake of this tutorial, we will use only D timeframe
 const config = {
     supported_resolutions: supportedResolutions
@@ -12,12 +12,12 @@ const config = {
 
 
 // history data
-const api_root = 'https://finnhub.io/api/v1/crypto/candle'
+const api_root = 'https://finnhub.io/api/v1'
 const history = {}
 
 
 // realtime data
-const socket_url = 'wss://ws.finnhub.io?token=bp60vd7rh5rcobn2deeg'
+const socket_url = 'wss://ws.finnhub.io?token=' + api_key
 const socket = new WebSocket(socket_url)
 var sub;
 var availableSymbols = []
@@ -34,7 +34,8 @@ export default {
 		
 		// Get all crypto symbol for binance
 		rp({
-			uri: 'https://finnhub.io/api/v1/crypto/symbol',
+			// uri: 'https://finnhub.io/api/v1/crypto/symbol',
+			uri: api_root + '/crypto/symbol',
 			qs: qs,
 		}).then(data => {
 			availableSymbols = data
@@ -93,7 +94,6 @@ export default {
 		let symbol = "BINANCE:" + symbolInfo.name.replace('/', '')
 
 		const qs = {
-			// symbol: symbolInfo.name,
 			symbol: symbol, // "BINANCE:BTCUSDT",
 			resolution: resolution,
 			from: from,
@@ -102,7 +102,7 @@ export default {
 		}
 
 		rp({
-			uri: api_root,
+			uri: api_root + '/crypto/candle',
 			qs: qs,
 		}).then(data => {
 			if (data['s'] === 'ok') {
@@ -143,8 +143,8 @@ export default {
 	},
 
 	subscribeBars: (symbolInfo, resolution, onRealtimeCallback, subscribeUID, onResetCacheNeededCallback) => {
-		console.log('=====subscribeBars runnning')
-		const symbol = 'BINANCE:BTCUSDT'
+		let symbol = "BINANCE:" + symbolInfo.name.replace('/', '')
+
 		socket.send(JSON.stringify({'type':'subscribe', 'symbol': symbol, resolution: 'D'}))
 
 		const newSub = {
